@@ -1,4 +1,5 @@
 use crate::Error;
+use simple_error::bail;
 
 #[derive(Clone, Copy, Debug)]
 pub struct GenIndex {
@@ -42,11 +43,7 @@ impl<T> GenIndexAllocator<T> {
                 Ok(new_key)
             }
             Some(free_idx) => match self.entries.get_mut(free_idx) {
-                None => {
-                    return Err(
-                        simple_error::SimpleError::new("Entry that should exist not found").into(),
-                    )
-                }
+                None => bail!("Could not find index that should exist"),
                 Some(entry) => {
                     entry.key.generation += 1;
                     entry.value.replace(value);
@@ -58,10 +55,10 @@ impl<T> GenIndexAllocator<T> {
 
     pub fn deallocate(&mut self, key: &GenIndex) -> Result<Option<T>, Error> {
         match self.entries.get_mut(key.index) {
-            None => return Err(simple_error::SimpleError::new("Not found").into()),
+            None => bail!("Deallocate: Index not found"),
             Some(entry) => {
                 if entry.key.generation != key.generation {
-                    return Err(simple_error::SimpleError::new("Wrong generation").into());
+                    bail!("Deallate: Wrong generation");
                 }
 
                 let value = entry.value.take();
@@ -79,7 +76,36 @@ impl<T> GenIndexAllocator<T> {
                     return None;
                 }
 
-                (&entry.value).as_ref()
+                (entry.value).as_ref()
+            }
+        }
+    }
+
+    // Should this be allowed? The value could be changed without increasing
+    // the generation.
+    pub fn get_mut(&mut self, key: &GenIndex) -> Option<&mut T> {
+        match self.entries.get_mut(key.index) {
+            None => return None,
+            Some(entry) => {
+                if entry.key.generation != key.generation {
+                    return None;
+                }
+
+                (entry.value).as_mut()
+            }
+        }
+    }
+
+    pub fn set(&mut self, key: &GenIndex, value: T) -> Result<(), Error> {
+        match self.entries.get_mut(key.index) {
+            None => bail!("Entry for key not found in set"),
+            Some(entry) => {
+                if entry.key.generation != key.generation {
+                    bail!("Entry exists but generation does not match");
+                }
+
+                entry.value.replace(value);
+                Ok(())
             }
         }
     }
