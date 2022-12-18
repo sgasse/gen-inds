@@ -26,7 +26,8 @@ impl<T> GenIndexAllocator<T> {
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             entries: Vec::with_capacity(capacity),
-            free_indices: Vec::new(),
+            // We assume that in most use cases, not all indices will be freed at the same time
+            free_indices: Vec::with_capacity(capacity / 4),
         }
     }
 
