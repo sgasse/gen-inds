@@ -97,7 +97,7 @@ impl<T> GenIndexAllocator<T> {
         }
     }
 
-    pub fn set(&mut self, key: &GenIndex, value: T) -> Result<(), Error> {
+    pub fn set(&mut self, key: &GenIndex, value: T) -> Result<T, Error> {
         match self.entries.get_mut(key.index) {
             None => bail!("GenIndexAllocator::set: Entry for key not found"),
             Some(entry) => {
@@ -105,8 +105,15 @@ impl<T> GenIndexAllocator<T> {
                     bail!("GenIndexAllocator::set: Entry exists but generation does not match");
                 }
 
-                entry.value.replace(value);
-                Ok(())
+                entry
+                    .value
+                    .replace(value)
+                    .ok_or_else(|| {
+                        simple_error::SimpleError::new(
+                            "GenIndexAllocator::set: Entry to overwrite is empty but should not be",
+                        )
+                    })
+                    .map_err(|e| e.into())
             }
         }
     }

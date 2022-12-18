@@ -5,7 +5,7 @@ documentation = "https://docs.rs/chrono-intervals/"
 repository = "https://github.com/sgasse/chrono-intervals"
 homepage = "https://github.com/sgasse/chrono-intervals"
 license = "MIT/Apache-2.0"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [dependencies]
