@@ -170,7 +170,7 @@ mod test {
     }
 
     #[test]
-    fn test_reuse_free_indexes() -> Result<(), Error> {
+    fn test_reuse_free_indices() -> Result<(), Error> {
         let capacity = 5;
         let mut gen_alloc = GenIndexAllocator::with_capacity(capacity);
         assert_eq!(gen_alloc.entries.len(), 0);
@@ -205,7 +205,7 @@ mod test {
             "We do not exceed capacity so it should be unchanged"
         );
 
-        // Reuse indexes, the capacity should be unchanged but old keys should get invalid
+        // Reuse indices, the capacity should be unchanged but old keys should get invalid
         let reused_entries_keys: Vec<_> = (0..num_keys_to_free)
             .into_iter()
             .map(|value| gen_alloc.allocate(value).expect("Should allocate"))

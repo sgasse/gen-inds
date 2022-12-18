@@ -1,9 +1,12 @@
 [package]
 name = "gen-inds"
+description = "Implementation of generational indices"
+documentation = "https://docs.rs/chrono-intervals/"
+repository = "https://github.com/sgasse/chrono-intervals"
+homepage = "https://github.com/sgasse/chrono-intervals"
+license = "MIT/Apache-2.0"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 simple-error = "0.2.3"
