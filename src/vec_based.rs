@@ -7,6 +7,7 @@ pub struct GenIndex {
     generation: u32,
 }
 
+#[derive(Debug)]
 struct GenIndexEntry<T> {
     key: GenIndex,
     value: Option<T>,
@@ -43,7 +44,9 @@ impl<T> GenIndexAllocator<T> {
                 Ok(new_key)
             }
             Some(free_idx) => match self.entries.get_mut(free_idx) {
-                None => bail!("Could not find index that should exist"),
+                None => bail!(
+                    "GenIndexAllocator::allocate: Could not find free index that should exist"
+                ),
                 Some(entry) => {
                     entry.key.generation += 1;
                     entry.value.replace(value);
@@ -55,10 +58,10 @@ impl<T> GenIndexAllocator<T> {
 
     pub fn deallocate(&mut self, key: &GenIndex) -> Result<Option<T>, Error> {
         match self.entries.get_mut(key.index) {
-            None => bail!("Deallocate: Index not found"),
+            None => bail!("GenIndexAllocator::deallocate: Index not found"),
             Some(entry) => {
                 if entry.key.generation != key.generation {
-                    bail!("Deallate: Wrong generation");
+                    bail!("GenIndexAllocator::deallocate: Wrong generation");
                 }
 
                 let value = entry.value.take();
@@ -81,8 +84,6 @@ impl<T> GenIndexAllocator<T> {
         }
     }
 
-    // Should this be allowed? The value could be changed without increasing
-    // the generation.
     pub fn get_mut(&mut self, key: &GenIndex) -> Option<&mut T> {
         match self.entries.get_mut(key.index) {
             None => return None,
@@ -98,10 +99,10 @@ impl<T> GenIndexAllocator<T> {
 
     pub fn set(&mut self, key: &GenIndex, value: T) -> Result<(), Error> {
         match self.entries.get_mut(key.index) {
-            None => bail!("Entry for key not found in set"),
+            None => bail!("GenIndexAllocator::set: Entry for key not found"),
             Some(entry) => {
                 if entry.key.generation != key.generation {
-                    bail!("Entry exists but generation does not match");
+                    bail!("GenIndexAllocator::set: Entry exists but generation does not match");
                 }
 
                 entry.value.replace(value);
@@ -116,29 +117,117 @@ mod test {
     use super::*;
 
     #[test]
-    fn create_and_allocate() {
-        let mut gen_alloc = GenIndexAllocator::new();
+    fn test_create_with_capacity() -> Result<(), Error> {
+        let capacity = 200;
+        let gen_alloc = GenIndexAllocator::<i32>::with_capacity(capacity);
+        assert_eq!(gen_alloc.entries.capacity(), capacity);
+        Ok(())
+    }
 
-        let mut alloced_keys: Vec<_> = (0..10)
+    #[test]
+    fn test_allocate_and_get() -> Result<(), Error> {
+        let mut gen_alloc = GenIndexAllocator::with_capacity(10);
+
+        // Create value and check it
+        let value1 = 1i32;
+        let key1 = gen_alloc.allocate(value1)?;
+        assert_eq!(gen_alloc.entries.len(), 1);
+        assert_eq!(gen_alloc.get(&key1), Some(&value1));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_allocate_and_set() -> Result<(), Error> {
+        let mut gen_alloc = GenIndexAllocator::with_capacity(10);
+
+        // Create value and check it
+        let value1 = 1i32;
+        let key1 = gen_alloc.allocate(value1)?;
+        assert_eq!(gen_alloc.entries.len(), 1);
+        assert_eq!(gen_alloc.get(&key1), Some(&value1));
+
+        // Create value and check it
+        let value2 = 2i32;
+        let key2 = gen_alloc.allocate(value2)?;
+        assert_eq!(gen_alloc.entries.len(), 2);
+        assert_eq!(gen_alloc.get(&key2), Some(&value2));
+
+        // Set first key to different value - the second value should be unchanged
+        let new_value1 = 99i32;
+        gen_alloc.set(&key1, new_value1)?;
+        assert_eq!(gen_alloc.entries.len(), 2);
+        assert_eq!(gen_alloc.get(&key1), Some(&new_value1));
+        assert_eq!(gen_alloc.get(&key2), Some(&value2));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_reuse_free_indexes() -> Result<(), Error> {
+        let capacity = 5;
+        let mut gen_alloc = GenIndexAllocator::with_capacity(capacity);
+        assert_eq!(gen_alloc.entries.len(), 0);
+        assert_eq!(gen_alloc.entries.capacity(), capacity);
+
+        let mut alloced_keys: Vec<_> = (0..capacity)
             .into_iter()
             .map(|value| gen_alloc.allocate(value).expect("Should allocate"))
             .collect();
-        dbg!(&alloced_keys);
 
-        for key in alloced_keys.iter() {
-            assert!(gen_alloc.get(key).is_some());
+        // We created the values in order - check that each key points to the right value
+        for (value, key) in alloced_keys.iter().enumerate() {
+            assert_eq!(gen_alloc.get(key), Some(&value));
         }
 
-        let to_free = alloced_keys.split_off(5);
+        // Split the keys and free some of them
+        let num_keys_to_free = 2;
+        let to_free = alloced_keys.split_off(capacity - num_keys_to_free);
 
         for key in to_free.iter() {
-            gen_alloc.deallocate(key);
+            gen_alloc.deallocate(key)?;
         }
 
-        let new_alloced_keys: Vec<_> = (0..10)
+        assert_eq!(
+            gen_alloc.entries.len(),
+            capacity,
+            "We do not remove entries so the length should be unchanged"
+        );
+        assert_eq!(
+            gen_alloc.entries.capacity(),
+            capacity,
+            "We do not exceed capacity so it should be unchanged"
+        );
+
+        // Reuse indexes, the capacity should be unchanged but old keys should get invalid
+        let reused_entries_keys: Vec<_> = (0..num_keys_to_free)
             .into_iter()
             .map(|value| gen_alloc.allocate(value).expect("Should allocate"))
             .collect();
-        dbg!(&new_alloced_keys);
+
+        assert_eq!(
+            gen_alloc.entries.len(),
+            capacity,
+            "We do not remove entries so the length should be unchanged"
+        );
+        assert_eq!(
+            gen_alloc.entries.capacity(),
+            capacity,
+            "We do not exceed capacity so it should be unchanged"
+        );
+
+        for key in to_free.iter() {
+            assert_eq!(
+                gen_alloc.get(key),
+                None,
+                "This key should be invalid because the generation does not match"
+            );
+        }
+
+        for (value, key) in reused_entries_keys.iter().enumerate() {
+            assert_eq!(gen_alloc.get(key), Some(&value));
+        }
+
+        Ok(())
     }
 }
