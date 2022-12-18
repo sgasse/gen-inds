@@ -1,22 +1,22 @@
 use crate::Error;
 
 #[derive(Clone, Copy, Debug)]
-pub struct GenIndKey {
+pub struct GenIndex {
     index: usize,
     generation: u32,
 }
 
-struct GenEntry<T> {
-    key: GenIndKey,
-    data: Option<T>,
+struct GenIndexEntry<T> {
+    key: GenIndex,
+    value: Option<T>,
 }
 
-pub struct GenAllocator<T> {
-    entries: Vec<GenEntry<T>>,
+pub struct GenIndexAllocator<T> {
+    entries: Vec<GenIndexEntry<T>>,
     free_indices: Vec<usize>,
 }
 
-impl<T> GenAllocator<T> {
+impl<T> GenIndexAllocator<T> {
     pub fn new() -> Self {
         Self::with_capacity(100)
     }
@@ -28,16 +28,16 @@ impl<T> GenAllocator<T> {
         }
     }
 
-    pub fn allocate(&mut self, value: T) -> Result<GenIndKey, Error> {
+    pub fn allocate(&mut self, value: T) -> Result<GenIndex, Error> {
         match self.free_indices.pop() {
             None => {
-                let new_key = GenIndKey {
+                let new_key = GenIndex {
                     index: self.entries.len(),
                     generation: 0,
                 };
-                self.entries.push(GenEntry {
+                self.entries.push(GenIndexEntry {
                     key: new_key,
-                    data: Some(value),
+                    value: Some(value),
                 });
                 Ok(new_key)
             }
@@ -49,14 +49,14 @@ impl<T> GenAllocator<T> {
                 }
                 Some(entry) => {
                     entry.key.generation += 1;
-                    entry.data.replace(value);
+                    entry.value.replace(value);
                     Ok(entry.key.clone())
                 }
             },
         }
     }
 
-    pub fn deallocate(&mut self, key: &GenIndKey) -> Result<Option<T>, Error> {
+    pub fn deallocate(&mut self, key: &GenIndex) -> Result<Option<T>, Error> {
         match self.entries.get_mut(key.index) {
             None => return Err(simple_error::SimpleError::new("Not found").into()),
             Some(entry) => {
@@ -64,14 +64,14 @@ impl<T> GenAllocator<T> {
                     return Err(simple_error::SimpleError::new("Wrong generation").into());
                 }
 
-                let value = entry.data.take();
+                let value = entry.value.take();
                 self.free_indices.push(key.index);
                 Ok(value)
             }
         }
     }
 
-    pub fn get(&self, key: &GenIndKey) -> Option<&T> {
+    pub fn get(&self, key: &GenIndex) -> Option<&T> {
         match self.entries.get(key.index) {
             None => return None,
             Some(entry) => {
@@ -79,7 +79,7 @@ impl<T> GenAllocator<T> {
                     return None;
                 }
 
-                (&entry.data).as_ref()
+                (&entry.value).as_ref()
             }
         }
     }
@@ -87,11 +87,11 @@ impl<T> GenAllocator<T> {
 
 #[cfg(test)]
 mod test {
-    use super::GenAllocator;
+    use super::*;
 
     #[test]
     fn create_and_allocate() {
-        let mut gen_alloc = GenAllocator::new();
+        let mut gen_alloc = GenIndexAllocator::new();
 
         let mut alloced_keys: Vec<_> = (0..10)
             .into_iter()
