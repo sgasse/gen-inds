@@ -50,7 +50,7 @@ impl<T> GenIndexAllocator<T> {
                 Some(entry) => {
                     entry.key.generation += 1;
                     entry.value.replace(value);
-                    Ok(entry.key.clone())
+                    Ok(entry.key)
                 }
             },
         }
@@ -73,7 +73,7 @@ impl<T> GenIndexAllocator<T> {
 
     pub fn get(&self, key: &GenIndex) -> Option<&T> {
         match self.entries.get(key.index) {
-            None => return None,
+            None => None,
             Some(entry) => {
                 if entry.key.generation != key.generation {
                     return None;
@@ -86,7 +86,7 @@ impl<T> GenIndexAllocator<T> {
 
     pub fn get_mut(&mut self, key: &GenIndex) -> Option<&mut T> {
         match self.entries.get_mut(key.index) {
-            None => return None,
+            None => None,
             Some(entry) => {
                 if entry.key.generation != key.generation {
                     return None;
@@ -109,6 +109,12 @@ impl<T> GenIndexAllocator<T> {
                 Ok(())
             }
         }
+    }
+}
+
+impl<T> Default for GenIndexAllocator<T> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
