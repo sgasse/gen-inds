@@ -22,28 +22,31 @@ impl<T> GenAllocator<T> {
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
-        let entries: Vec<_> = (0..capacity)
-            .into_iter()
-            .map(|index| GenEntry {
-                key: GenIndKey {
-                    index,
-                    generation: 0,
-                },
-                data: None,
-            })
-            .collect();
-        let free_indices: Vec<_> = (0..capacity).into_iter().rev().collect();
         Self {
-            entries,
-            free_indices,
+            entries: Vec::with_capacity(capacity),
+            free_indices: Vec::new(),
         }
     }
 
     pub fn allocate(&mut self, value: T) -> Result<GenIndKey, Error> {
         match self.free_indices.pop() {
-            None => return Err(simple_error::SimpleError::new("No free index left!").into()),
+            None => {
+                let new_key = GenIndKey {
+                    index: self.entries.len(),
+                    generation: 0,
+                };
+                self.entries.push(GenEntry {
+                    key: new_key,
+                    data: Some(value),
+                });
+                Ok(new_key)
+            }
             Some(free_idx) => match self.entries.get_mut(free_idx) {
-                None => return Err(simple_error::SimpleError::new("Entry not found").into()),
+                None => {
+                    return Err(
+                        simple_error::SimpleError::new("Entry that should exist not found").into(),
+                    )
+                }
                 Some(entry) => {
                     entry.key.generation += 1;
                     entry.data.replace(value);
